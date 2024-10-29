@@ -1,3 +1,5 @@
+// NOTE: called as stand-alone script
+
 import { createClient } from 'redis';
 import { delay } from './utils';
 
@@ -21,7 +23,7 @@ async function processObjects() {
 
         while (true) {
             // Fetch an object from Redis (assuming objects are stored in a list)
-            const object = await redisClient.lPop('myQueue'); // 'myQueue' is the key of the list in Redis
+            const object = await redisClient.lPop('liqQueue'); // 'liqQueue' is the key of the list in Redis
 
             if (object) {
                 // Process the object (your custom processing logic goes here)
@@ -34,7 +36,7 @@ async function processObjects() {
                 console.log('Object processed and removed from Redis.');
             } else {
                 // If no object is available, wait for 1 second and check again
-                console.log('No objects to process, waiting for 1 second...');
+                // console.log('No objects to process, waiting for 1 second...');
                 await delay(1000);
             }
         }

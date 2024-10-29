@@ -1,6 +1,5 @@
 import { Worker } from 'worker_threads'; // , isMainThread, parentPort, workerData                           
 import { cpus } from 'os';
-import { resolve } from 'path';
 
 const numCPUs = cpus().length - 1; // Use all but one CPU core for workers
 let results: any[] = [];

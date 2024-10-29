@@ -1,10 +1,9 @@
 import { PosDatabase } from './db';
-import { Position } from './position';
 import { Prices } from './prices';
-import Crypto from 'crypto';
 import { ContractEventMonitor } from './txMonitoring';
 import { createClient } from 'redis';
 import { distributeTasks } from './calcPosition';
+import { testPositions } from './const';
 
 const PRICE_INTERVAL = 5000;
 const CHAIN = 'eth';
@@ -17,7 +16,7 @@ const redisClient = createClient({
 });
 
 async function pushToRedis(data: string): Promise<void> {
-    await redisClient.lPush('myQueue', data);        
+    await redisClient.lPush('liqQueue', data);        
 }
 
 // run by timer. get results from redis. remove processed. move back unprocessed
@@ -36,26 +35,16 @@ async function checkLiquidationResults() {
     const all = db.getAllPositions();
     
     if (all.length === 0) {
-        // Add some positions
+        // Add some test positions
         const date = new Date();
         const deadline = new Date();
         deadline.setDate(date.getDate() + 30);
-        const newPosition: Position = {
-            id: Crypto.randomUUID().toString(), // TODO should be position ID from contract
-            orderId: (1).toString(), 
-            owner: '0xF5bEC430576fF1b82e44DDB5a1C93F6F9d0884f3',
-            assets: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
-            balances: [(10).toString()],
-            whitelistedTokens: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
-            whitelistedTokenList: undefined,
-            created: date,
-            deadline: deadline,
-            baseAsset: '0xfff9976782d46cc05630d1f6ebab18b2324d6b14',
-            initialBalance: (10).toString(),
-            interest: 15
-        };
         
-        await db.addPosition(newPosition);
+        for (let pos of testPositions) {
+            pos.created = date;
+            pos.deadline = deadline;
+            await db.addPosition(pos);
+        }
     }
 
     // test tasks calculation
@@ -87,11 +76,11 @@ async function checkLiquidationResults() {
     console.log('AAVE price: ', pricer.getTokenPrice(AAVE_TOKEN));
     console.log('Token price: ', pricer.getTokenPrice('0xfff9976782d46cc05630d1f6ebab18b2324d6b14'));
 
-    // stop prices updater
-    pricer.stopUpdates();
-
     // test sending position to liquidation
     await pushToRedis('hi there');
 
+    // finish background tasks
     await redisClient.disconnect();
+    pricer.stopUpdates();
+    eventMonitor.stopMonitoring();
 })();

@@ -1,7 +1,7 @@
 // get real token prices
 // return price for requested token
 // should it be service, monitoring/getting prices from API 
-// how to get prices not included in API ?
+// TODO get prices not included in API (get from DEX)
 
 import axios from 'axios';
 

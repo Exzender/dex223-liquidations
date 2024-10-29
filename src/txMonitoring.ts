@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
-import { ethRpcArray } from './const';
+import { ethRpcArray, testContractPositions } from './const';
 import EventEmitter from 'events';
+import { ContractPosition } from "./position";
 
 const abi = [
     // Example event ABI
@@ -65,10 +66,24 @@ export class ContractEventMonitor extends EventEmitter{
         }
     }
     
+    async getPositionData(id: bigint): Promise<ContractPosition> {
+        return testContractPositions[0];    
+    }
+    
     processEvent(eventData: any) {
         // TODO process event
         // extract positions info
         // or positions change
+        switch (eventData.eventType) {
+            case 'NewPosition':
+                break;
+            case 'AssetChange':
+                break;
+            case 'ClosePosition':
+                break;
+            default:
+
+        }
         
         this.emit('processEvent', eventData);        
     }
