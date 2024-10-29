@@ -4,12 +4,15 @@ import { ContractEventMonitor } from './txMonitoring';
 import { createClient } from 'redis';
 import { distributeTasks } from './calcPosition';
 import { testPositions } from './const';
+import { AssetChange, ContractPosition, Position } from './position';
 
 const PRICE_INTERVAL = 5000;
 const CHAIN = 'eth';
 
 const AAVE_TOKEN = '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9';
 const USDT_TOKEN = '0xdac17f958d2ee523a2206206994597c13d831ec7';
+
+let db: PosDatabase;
 
 const redisClient = createClient({
     url: 'redis://localhost:6379' // Adjust the URL to match your Redis server setup
@@ -24,10 +27,85 @@ async function checkLiquidationResults() {
     
 }
 
+async function positionCreatedEvent(pos: ContractPosition): Promise<void> {
+    console.log('got positionCreatedEvent');
+    
+    // process new position
+    const position: Position = {
+        id: pos.id.toString(),
+        orderId: pos.orderId.toString(),
+        owner: pos.owner,
+        assets: pos.assets,
+        balances: pos.balances.map((val) => val.toString()),
+        whitelistedTokens: pos.whitelistedTokens,
+        whitelistedTokenList: pos.whitelistedTokenList,
+        created: new Date(), // TODO get from event timestamp
+        deadline: new Date(Number(pos.deadline * 1000n)),
+        baseAsset: pos.baseAsset,
+        initialBalance: pos.initialBalance.toString(),
+        interest: Number(pos.interest)
+    }
+    
+    // TODO calculate position sum/value 
+    
+    // TODO db has no unique index check?
+    await db.addPosition(position);
+
+    // TODO check results
+    console.dir(db.getAllPositions());
+}
+
+async function assetAddedEvent(eventData: AssetChange): Promise<void> {
+    console.log('got assetAddedEvent');
+    // process updated positions
+    const pos = db.findById(eventData.id.toString());
+    // TODO if no position found - do what ? (ignore?  create position?)
+    
+    let foundAsset = false; 
+    
+    if (pos) {
+        const tempObject = {
+            assets: pos.assets,
+            balances: pos.balances
+        }
+        
+        // TODO maybe move to DB module
+        if (pos.assets.length) {
+            for (let i = 0; i < pos.assets.length; i++) {
+                const asset = pos.assets[i];
+                if (asset === eventData.asset) {
+                    foundAsset = true;
+                    tempObject.balances[i] = (BigInt(pos.balances[i]) + eventData.value).toString();
+                    break;
+                }
+            }
+        }
+
+        if (!foundAsset) {
+            tempObject.assets.push(eventData.asset);
+            tempObject.balances.push(eventData.value.toString());
+        }
+
+        await db.updatePosition(eventData.id.toString(), tempObject);
+    }
+
+    // TODO check results
+    console.dir(db.getAllPositions());
+}
+
+async function positionClosedEvent(id: bigint): Promise<void> {
+    console.log('got positionClosedEvent');
+    // TODO process updated positions
+    await db.deletePosition(id.toString());
+
+    // TODO check results
+    console.dir(db.getAllPositions());
+}
+
 (async() => {
     await redisClient.connect();
     
-    const db = new PosDatabase('./data/db.json');
+    db = new PosDatabase('./data/db.json');
 
     // Initialize the database
     await db.initialize();
@@ -56,11 +134,9 @@ async function checkLiquidationResults() {
 
     // test contract events monitoring
     const eventMonitor = new ContractEventMonitor(USDT_TOKEN);
-    eventMonitor.on('processEvent', (data) => {
-        console.log('got event in main');
-        // TODO process new/updated positions
-        // filter out unwanted ones (not fit by criteria)
-    } );
+    eventMonitor.on('PositionCreated', positionCreatedEvent);
+    eventMonitor.on('AssetAdded', assetAddedEvent);
+    eventMonitor.on('PositionClosed', positionClosedEvent);
                                              
     // start prices updater
     const pricer = new Prices(PRICE_INTERVAL, CHAIN);

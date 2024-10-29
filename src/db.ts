@@ -42,6 +42,36 @@ export class PosDatabase extends LowWithLodash<Data> {
         await this.write(); // Write changes to the file
     }
 
+    // Delete a position by ID
+    async deletePosition(id: string): Promise<boolean> {
+        const positionExists = this.chain.get('positions').some({ id }).value();
+        if (positionExists) {
+            // Remove the position with the specified ID
+            this.data!.positions = this.chain.get('positions').reject({ id }).value();
+            await this.write(); // Save changes to the file
+            return true; // Return true if deletion was successful
+        }
+        return false; // Return false if position was not found
+    }
+
+    // Update a position by ID
+    async updatePosition(id: string, updatedData: Partial<Position>): Promise<boolean> {
+        const positionIndex = this.chain.get('positions').findIndex({ id }).value();
+
+        // Check if position exists
+        if (positionIndex !== -1) {
+            // Update the specific position's data
+            this.data!.positions[positionIndex] = {
+                ...this.data!.positions[positionIndex],
+                ...updatedData
+            };
+            await this.write(); // Write changes to the file
+            return true; // Return true if update was successful
+        }
+
+        return false; // Return false if position was not found
+    }
+
     // Get all positions from the database
     getAllPositions(): Position[] {
         return this.chain.get('positions').value();

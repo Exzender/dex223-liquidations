@@ -28,3 +28,9 @@ export type ContractPosition = {
     initialBalance: bigint; 
     interest: bigint;
 };
+
+export type AssetChange = {
+    id: bigint;
+    asset: string;
+    value: bigint;
+}

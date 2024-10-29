@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
-import { ethRpcArray, testContractPositions } from './const';
+import { ethRpcArray, testContractPositions, testEvents } from './const';
 import EventEmitter from 'events';
-import { ContractPosition } from "./position";
+import { ContractPosition, AssetChange } from "./position";
+import { delay } from './utils';
 
 const abi = [
     // Example event ABI
@@ -26,8 +27,10 @@ export class ContractEventMonitor extends EventEmitter{
         this.contract = new ethers.Contract(contractAddress, abi, this.provider);
         
         this.monitorEvent = this.monitorEvent.bind(this);
+        this.generateFakeEvents = this.generateFakeEvents.bind(this);
         // NOTE start monitoring 
         setTimeout(this.monitorEvent, 1000, 'Transfer');
+        setTimeout(this.generateFakeEvents, 2000);
     }
     
     // NOTE how often need to check provider ?
@@ -66,26 +69,50 @@ export class ContractEventMonitor extends EventEmitter{
         }
     }
     
+    // TODO get real position from Blockchain instead of fake test data
     async getPositionData(id: bigint): Promise<ContractPosition> {
+        for (let pos of testContractPositions) {
+            if (pos.id === id) {
+                return pos;
+            }
+        }
         return testContractPositions[0];    
     }
     
-    processEvent(eventData: any) {
-        // TODO process event
-        // extract positions info
-        // or positions change
-        switch (eventData.eventType) {
-            case 'NewPosition':
-                break;
-            case 'AssetChange':
-                break;
-            case 'ClosePosition':
-                break;
-            default:
+    // TODO test manually added events 
+    private async generateFakeEvents(): Promise<void> {
+        for (let event of testEvents) {
+            await this.processEvent(event);
+            await delay(1000);
+        }    
+    }
 
+    // process smart contract event
+    async processEvent(eventData: any) {
+        switch (eventData.event) {
+            case 'PositionCreated': {
+                // get full positions info
+                const pos = await this.getPositionData(eventData.returnValues['0']);
+                this.emit('PositionCreated', pos);
+                break;
+            }
+            case 'AssetAdded': {
+                // copy asset changes
+                const obj: AssetChange = {
+                    id: eventData.returnValues['_positionId'],
+                    asset: eventData.returnValues['_asset'],
+                    value: eventData.returnValues['_value'],
+                }
+                this.emit('AssetAdded', obj);
+                break;
+            }
+            case 'PositionClosed': {
+                // TODO also add owner to returned values ?
+                this.emit('PositionClosed', eventData.returnValues['0']);
+                break;
+            }
+            default: {}
         }
-        
-        this.emit('processEvent', eventData);        
     }
 
     // Start monitoring a specific event by event name and callback function
