@@ -6,8 +6,6 @@ const numCPUs = cpus().length - 1; // Use all but one CPU core for workers
 let results: any[] = [];
 
 type ProcessedResult = {
-    id: string;
-    shouldContinue: boolean;
     result: any;
 };
 
@@ -42,27 +40,28 @@ export async function distributeTasks(objectsArray: Position[], prices: Map<stri
         }
     }
 
-    // Wait for all workers to return their results
-    const allResults = await Promise.all(tasks);
+    while (tasks.length > 0) {
+        try {
+            const result = await Promise.race(tasks);
+            
+            // TODO return result - emit event
+            results.push(result);
 
-    for (const result of allResults) {
-        result.forEach((res: ProcessedResult) => {
-            if (!res.shouldContinue) {
-                // Remove object based on the condition returned by worker
-                remainingObjects = remainingObjects.filter(obj => obj.id !== res.id);
+            // remove finished task
+            const index = tasks.findIndex(p => p === Promise.resolve(result));
+            if (index !== -1) {
+                tasks.splice(index, 1);
             }
-            results.push(res.result);
-        });
+        } catch (error) {
+            console.error('Error occurred:', error);
+            // remove error task
+            const index = tasks.findIndex(p => p === Promise.reject(error));
+            if (index !== -1) {
+                tasks.splice(index, 1);
+            }
+        }
     }
 
     console.log('All tasks completed. Results:', results);
-
-    // Decide if we need to rerun another calculation cycle
-    if (remainingObjects.length > 0) {
-        console.log('Some objects need further processing.');
-        await distributeTasks(remainingObjects, prices);
-    } else {
-        console.log('All objects processed.');
-    }
 }
 
