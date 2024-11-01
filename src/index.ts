@@ -4,19 +4,24 @@ import { ContractEventMonitor } from './txMonitoring';
 import { createClient } from 'redis';
 import { distributeTasks } from './calcPosition';
 import { testPositions } from './const';
-import { AssetChange, ContractPosition, Position } from './position';
+import { AssetChange, ContractPosition, Position, Asset } from './position';
+import { calculateAssetsValue } from './calcWorker';
 
 const PRICE_INTERVAL = 5000;
+const RECALC_INTERVAL = 6000; // how often to call positions value check
 const CHAIN = 'eth';
 
 const AAVE_TOKEN = '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9';
 const USDT_TOKEN = '0xdac17f958d2ee523a2206206994597c13d831ec7';
 
 let db: PosDatabase;
+let pricer: Prices;
 
 const redisClient = createClient({
     url: 'redis://localhost:6379' // Adjust the URL to match your Redis server setup
 });
+
+
 
 async function pushToRedis(data: string): Promise<void> {
     await redisClient.lPush('liqQueue', data);        
@@ -27,26 +32,45 @@ async function checkLiquidationResults() {
     
 }
 
+// function call of calcPosition with interval
+async function iteratePositions() {
+    const positions = db.getAllPositions();
+    const prices = pricer.getAllPrices();
+    await distributeTasks(positions, prices);
+    setTimeout(iteratePositions, RECALC_INTERVAL);    
+}
+
 async function positionCreatedEvent(pos: ContractPosition): Promise<void> {
     console.log('got positionCreatedEvent');
+    
+    let assets: Asset[] = [];
+    for (let i = 0; i < pos.assets.length; i++) {
+        assets.push({
+            address: pos.assets[i],
+            value: pos.balances[i].toString()
+        })
+    }
     
     // process new position
     const position: Position = {
         id: pos.id.toString(),
         orderId: pos.orderId.toString(),
         owner: pos.owner,
-        assets: pos.assets,
-        balances: pos.balances.map((val) => val.toString()),
+        assets: assets,
         whitelistedTokens: pos.whitelistedTokens,
         whitelistedTokenList: pos.whitelistedTokenList,
         created: new Date(), // TODO get from event timestamp
         deadline: new Date(Number(pos.deadline * 1000n)),
         baseAsset: pos.baseAsset,
         initialBalance: pos.initialBalance.toString(),
-        interest: Number(pos.interest)
+        interest: Number(pos.interest),
+        initialSum: 0
     }
     
-    // TODO calculate position sum/value 
+    // calculate position sum/value 
+    const prices = pricer.getAllPrices();
+    const res = calculateAssetsValue(position, prices);
+    position.initialSum = res.totalInBaseAsset;
     
     // TODO db has no unique index check?
     await db.addPosition(position);
@@ -64,29 +88,35 @@ async function assetAddedEvent(eventData: AssetChange): Promise<void> {
     let foundAsset = false; 
     
     if (pos) {
-        const tempObject = {
-            assets: pos.assets,
-            balances: pos.balances
-        }
+        const assets = pos.assets;
+        
+        // const tempObject = {
+        //     assets: pos.assets,
+        //     balances: pos.balances
+        // }
         
         // TODO maybe move to DB module
         if (pos.assets.length) {
             for (let i = 0; i < pos.assets.length; i++) {
+            // for (let asset of assets) {
                 const asset = pos.assets[i];
-                if (asset === eventData.asset) {
+                if (asset.address === eventData.asset) {
                     foundAsset = true;
-                    tempObject.balances[i] = (BigInt(pos.balances[i]) + eventData.value).toString();
+                    assets[i].value = (BigInt(assets[i].value) + eventData.value).toString();
                     break;
                 }
             }
         }
 
         if (!foundAsset) {
-            tempObject.assets.push(eventData.asset);
-            tempObject.balances.push(eventData.value.toString());
+            assets.push({
+                address: eventData.asset,
+                value: eventData.value.toString()
+            });
+            // tempObject.balances.push(eventData.value.toString());
         }
 
-        await db.updatePosition(eventData.id.toString(), tempObject);
+        await db.updatePosition(eventData.id.toString(), { assets });
     }
 
     // TODO check results
@@ -125,13 +155,6 @@ async function positionClosedEvent(id: bigint): Promise<void> {
         }
     }
 
-    // test tasks calculation
-    const objs: any[] = [];
-    for (let i = 0; i < 100; i++) {
-        objs.push({id: i+1, param: i*2});    
-    } 
-    distributeTasks(objs).then();
-
     // test contract events monitoring
     const eventMonitor = new ContractEventMonitor(USDT_TOKEN);
     eventMonitor.on('PositionCreated', positionCreatedEvent);
@@ -139,7 +162,7 @@ async function positionClosedEvent(id: bigint): Promise<void> {
     eventMonitor.on('PositionClosed', positionClosedEvent);
                                              
     // start prices updater
-    const pricer = new Prices(PRICE_INTERVAL, CHAIN);
+    pricer = new Prices(PRICE_INTERVAL, CHAIN);
     await pricer.addAddress(AAVE_TOKEN, true); // AAVE token
     
     // Query positions
@@ -152,6 +175,9 @@ async function positionClosedEvent(id: bigint): Promise<void> {
     console.log('AAVE price: ', pricer.getTokenPrice(AAVE_TOKEN));
     console.log('Token price: ', pricer.getTokenPrice('0xfff9976782d46cc05630d1f6ebab18b2324d6b14'));
 
+    // tasks calculation
+    setTimeout(iteratePositions, 1000);
+    
     // test sending position to liquidation
     await pushToRedis('hi there');
 

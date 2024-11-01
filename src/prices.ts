@@ -20,6 +20,10 @@ export class Prices {
         this.chain = chain;
     }
     
+    getAllPrices(): Map<string, number> {
+        return this.localPrices;    
+    }
+    
     getTokenPrice(address: string): number {
         if (this.localPrices.has(address)) {
             return this.localPrices.get(address) ?? 0;

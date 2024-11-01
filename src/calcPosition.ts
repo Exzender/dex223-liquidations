@@ -1,21 +1,22 @@
 import { Worker } from 'worker_threads'; // , isMainThread, parentPort, workerData                           
 import { cpus } from 'os';
+import { Position } from './position';
 
 const numCPUs = cpus().length - 1; // Use all but one CPU core for workers
 let results: any[] = [];
 
 type ProcessedResult = {
-    id: number;
+    id: string;
     shouldContinue: boolean;
     result: any;
 };
 
-function createWorker(data: any): Promise<ProcessedResult[]> {
-    return new Promise((resolvep, reject) => {
-        const worker = new Worker('./dist/calcWorker.js', { workerData: data });
+function createWorker(data: Position[], prices: Map<string, number>): Promise<ProcessedResult[]> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker('./dist/calcWorker.js', { workerData: { data, prices } });
 
         worker.on('message', (result: ProcessedResult[]) => {
-            resolvep(result);
+            resolve(result);
         });
 
         worker.on('error', reject);
@@ -28,7 +29,7 @@ function createWorker(data: any): Promise<ProcessedResult[]> {
     });
 }
 
-export async function distributeTasks(objectsArray: any[]) {
+export async function distributeTasks(objectsArray: Position[], prices: Map<string, number>): Promise<void> {
     const chunkSize = Math.ceil(objectsArray.length / numCPUs);
     const tasks = [];
 
@@ -37,7 +38,7 @@ export async function distributeTasks(objectsArray: any[]) {
     for (let i = 0; i < numCPUs; i++) {
         const chunk = remainingObjects.splice(0, chunkSize);
         if (chunk.length > 0) {
-            tasks.push(createWorker(chunk));
+            tasks.push(createWorker(chunk, prices));
         }
     }
 
@@ -59,7 +60,7 @@ export async function distributeTasks(objectsArray: any[]) {
     // Decide if we need to rerun another calculation cycle
     if (remainingObjects.length > 0) {
         console.log('Some objects need further processing.');
-        await distributeTasks(remainingObjects);
+        await distributeTasks(remainingObjects, prices);
     } else {
         console.log('All objects processed.');
     }

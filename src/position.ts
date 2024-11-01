@@ -1,9 +1,13 @@
+export type Asset = {
+    address: string;
+    value: string
+}
+
 export type Position = {
     id: string; // bigint
     orderId: string; // bigint
     owner: string;
-    assets: string[];
-    balances: string[]; // bigint[]
+    assets: Asset[];
     whitelistedTokens: string[];
     whitelistedTokenList?: string;
     created: Date; // NOTE there is no such field in smart contract
@@ -11,7 +15,7 @@ export type Position = {
     baseAsset: string;
     initialBalance: string; // bigint
     interest: number;
-    // TODO we have to store initial position VALUE (price) so we can compare it later
+    initialSum: number;  //initial position VALUE (price) so we can compare it later
     // TODO also need to store liquidation reward
 };
 
