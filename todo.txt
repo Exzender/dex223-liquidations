@@ -186,9 +186,3 @@ Lender'a либо назначать достаточно, либо ликвид
 9. Perpetual positions ?
 11. Как выиграть гонку с другими скрипатми
     
------------
-prompts
-
-write TS script that will take objects stored in redis and process them one by one. as soon as one object is processed - make a 0.1 sec delay. object should be deleted from redis as soon as it processed. if there are no more objects in redis - make 1 sec delay and check again.
-
-there is an array of objects. you need to write TS scripts/modules to process this array. you need to create a queue distributing these objects among child processes to perform long calculations with the parameters of these objects. therefore, each child process must be executed in its own thread (use worker_threads) - set the total number of such threads equal to the number of processor cores (minus 1). the processing time of each object can be considered approximately equal - therefore, you can immediately divide the entire original array at once by the number of available workers and immediately scatter the entire volume among the workers, or you can distribute them one by one as workers are released - choose what will be more efficient in terms of speed. the calculation results from the workers are returned to the main module, which, based on the results, decides what to do next (in one case, the object is removed from the original array, in the other, it remains to participate in a new calculation cycle)    
