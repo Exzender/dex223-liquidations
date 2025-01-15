@@ -5,11 +5,15 @@ import { createClient } from 'redis';
 import { distributeTasks } from './calcPosition';
 import { testPositions } from './const';
 import { AssetChange, ContractPosition, Position, Asset } from './position';
-import { calculateAssetsValue } from './calcWorker';
+import { calculateAssetsValue } from './utils';
+import * as fs from 'fs';
+import * as readline from 'readline';
+import { Wallet } from 'ethers';
 
 const PRICE_INTERVAL = 5000;
 const RECALC_INTERVAL = 6000; // how often to call positions value check
 const CHAIN = 'eth';
+const KEYSTORE_PATH = process.env.KEYSTORE_PATH;
 
 const AAVE_TOKEN = '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9';
 const USDT_TOKEN = '0xdac17f958d2ee523a2206206994597c13d831ec7';
@@ -32,11 +36,29 @@ async function checkLiquidationResults() {
     
 }
 
+async function askPassword(query: string): Promise<string> {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+        rl.question(query, (password) => {
+            rl.close();
+            resolve(password);
+        });
+    });
+}
+
 // function call of calcPosition with interval
 async function iteratePositions() {
     const positions = db.getAllPositions();
     const prices = pricer.getAllPrices();
     await distributeTasks(positions, prices);
+    
+    // TODO test
+    process.exit(1);
+    
     setTimeout(iteratePositions, RECALC_INTERVAL);    
 }
 
@@ -133,6 +155,32 @@ async function positionClosedEvent(id: bigint): Promise<void> {
 }
 
 (async() => {
+    if (!KEYSTORE_PATH) {
+        console.error('Error: KEYSTORE_PATH is not set in environment variables.');
+        process.exit(1);
+    }
+
+    // check args for password
+    const passwordArg = process.argv[2];
+    let password: string;
+
+    if (passwordArg) {
+        password = passwordArg;
+    } else {
+        password = await askPassword('Enter password for the keystore: ');
+    }
+
+    // reading keystore
+    try {
+        const keystoreData = fs.readFileSync(KEYSTORE_PATH, 'utf-8');
+        const wallet = await Wallet.fromEncryptedJson(keystoreData, password);
+        console.log('Wallet successfully decrypted!');
+        console.log('Wallet address:', wallet.address);
+    } catch (error) {
+        console.error('Failed to read or decrypt the keystore file:', error);
+        process.exit(1);
+    }
+    
     await redisClient.connect();
     
     db = new PosDatabase('./data/db.json');

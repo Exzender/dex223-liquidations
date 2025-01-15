@@ -9,9 +9,9 @@ type ProcessedResult = {
     result: any;
 };
 
-function createWorker(data: Position[], prices: Map<string, number>): Promise<ProcessedResult[]> {
+function createWorker(positions: Position[], prices: Map<string, number>): Promise<ProcessedResult[]> {
     return new Promise((resolve, reject) => {
-        const worker = new Worker('./dist/calcWorker.js', { workerData: { data, prices } });
+        const worker = new Worker('./dist/calcWorker.js', { workerData: { positions, prices } });
 
         worker.on('message', (result: ProcessedResult[]) => {
             resolve(result);

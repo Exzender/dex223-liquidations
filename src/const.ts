@@ -23,29 +23,29 @@ export const testPositions: Position[] = [
         id: Crypto.randomUUID().toString(), // TODO should be position ID from contract
         orderId: (1).toString(),
         owner: '0xF5bEC430576fF1b82e44DDB5a1C93F6F9d0884f3',
-        assets: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
-        balances: [(10).toString()],
+        assets: [{address: '0xfff9976782d46cc05630d1f6ebab18b2324d6b14', value: (10).toString()}],
         whitelistedTokens: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
         whitelistedTokenList: undefined,
         created: new Date(),
         deadline: new Date(),
         baseAsset: '0xfff9976782d46cc05630d1f6ebab18b2324d6b14',
         initialBalance: (10).toString(),
-        interest: 15
+        interest: 15, 
+        initialSum: 0
     },
     {
         id: Crypto.randomUUID().toString(), // TODO should be position ID from contract
         orderId: (2).toString(),
         owner: '0xF5bEC430576fF1b82e44DDB5a1C93F6F9d0884f3',
-        assets: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
-        balances: [(10).toString()],
+        assets: [{address: '0xfff9976782d46cc05630d1f6ebab18b2324d6b14', value: (10).toString()}],
         whitelistedTokens: ['0xfff9976782d46cc05630d1f6ebab18b2324d6b14'],
         whitelistedTokenList: undefined,
         created: new Date(),
         deadline: new Date(),
         baseAsset: '0xfff9976782d46cc05630d1f6ebab18b2324d6b14',
         initialBalance: (10).toString(),
-        interest: 15
+        interest: 15,
+        initialSum: 0
     }
 ];
 
